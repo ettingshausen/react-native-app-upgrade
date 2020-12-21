@@ -78,6 +78,12 @@ export const openAPPStore = (appid) => {
     }
 };
 
+export const openSafari = (downloadUrl) => {
+    if (!ANDROID_PLATFORM) {
+        RNUpgrade.openSafari(downloadUrl);
+    }
+}
+
 /**
  * android apk下载回调
  * @param callBack

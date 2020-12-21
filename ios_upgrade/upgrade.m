@@ -94,4 +94,10 @@ RCT_EXPORT_METHOD(openAPPStore:(NSString *)storeappID ){
   return @{ @"versionName": currentVersion };
 }
 
+RCT_EXPORT_METHOD(openSafari:(NSString *) downloadUrl){
+  UIApplication *application = [UIApplication sharedApplication];
+  NSURL *url = [NSURL URLWithString: downloadUrl];
+  [application openURL:url options:@{} completionHandler:nil];
+}
+
 @end
