@@ -1,6 +1,7 @@
 package com.songlcy.rnupgrade;
 
 import com.songlcy.rnupgrade.R;
+
 import android.app.IntentService;
 import android.app.NotificationManager;
 import android.app.NotificationChannel;
@@ -9,17 +10,30 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.app.ActivityManager;
+
 import androidx.core.app.NotificationCompat.Builder;
 import androidx.core.content.FileProvider;
+
 import android.util.Log;
 import android.os.Build;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLConnection;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.List;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 public class DownloadService extends IntentService {
 
@@ -28,7 +42,7 @@ public class DownloadService extends IntentService {
 
     private static final int NOTIFICATION_ID = 0;
     private static final int DOWNLOAD_SUCCESS_NOTIFICATION_ID = 1;
-    
+
     private NotificationManager mNotifyManager;
     private Builder mBuilder;
     private Builder mDownLoadSuccessBuilder;
@@ -41,15 +55,15 @@ public class DownloadService extends IntentService {
     protected void onHandleIntent(Intent intent) {
 
         mNotifyManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             mBuilder = new Builder(this, "downLoadChannelId");
             NotificationChannel channel = new NotificationChannel("downLoadChannelId", "downLoadChannel", NotificationManager.IMPORTANCE_LOW);
             mNotifyManager.createNotificationChannel(channel);
         } else {
             mBuilder = new Builder(this);
         }
-        
+
         String appName = getString(getApplicationInfo().labelRes);
         int icon = getApplicationInfo().icon;
         mBuilder.setContentTitle(appName).setSmallIcon(icon);
@@ -59,7 +73,43 @@ public class DownloadService extends IntentService {
         FileOutputStream out = null;
         try {
             URL url = new URL(urlStr);
-            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+            URLConnection connection = url.openConnection();
+            HttpURLConnection urlConnection = (HttpURLConnection) connection;
+            if (url.getProtocol().equalsIgnoreCase("https")) {
+                HttpsURLConnection httpsURLConnection = (HttpsURLConnection) urlConnection;
+                TrustManager[] trustAllCerts = new TrustManager[]{new X509TrustManager() {
+
+                    public X509Certificate[] getAcceptedIssuers() {
+
+                        return new X509Certificate[0];
+
+                    }
+
+                    @Override
+
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
+
+                    }
+
+                    @Override
+
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
+
+                    }
+
+                }};
+                SSLContext sc = SSLContext.getInstance("SSL");
+                sc.init(null, trustAllCerts, new SecureRandom());
+                httpsURLConnection.setSSLSocketFactory(sc.getSocketFactory());
+
+                httpsURLConnection.setHostnameVerifier(new HostnameVerifier() {
+                    @Override
+                    public boolean verify(String hostname, SSLSession session) {
+                        return true;
+                    }
+                });
+            }
+
 
             urlConnection.setRequestMethod("GET");
             urlConnection.setDoOutput(false);
@@ -99,6 +149,7 @@ public class DownloadService extends IntentService {
             mNotifyManager.cancel(NOTIFICATION_ID);
 
         } catch (Exception e) {
+            e.printStackTrace();
             Log.e(TAG, "download apk file error");
         } finally {
             if (out != null) {
@@ -133,7 +184,7 @@ public class DownloadService extends IntentService {
         Intent intent = new Intent();
         intent.setAction(Intent.ACTION_VIEW);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             String authority = getPackageName() + ".updateFileProvider";
             Uri apkUri = FileProvider.getUriForFile(this, authority, apkFile);
@@ -151,19 +202,19 @@ public class DownloadService extends IntentService {
 
         if (isAppRunningForeground()) {
             startActivity(intent);
-        } else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             sendDownLoadSuccessNotification(apkFile, appName, icon);
         } else {
             moveAppToFront();
             startActivity(intent);
         }
     }
-    
+
     // 判断当前App是否处于前台
     private boolean isAppRunningForeground() {
-        ActivityManager activityManager = (ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
         List<ActivityManager.RunningAppProcessInfo> runningAppProcessList = activityManager.getRunningAppProcesses();
-        for (ActivityManager.RunningAppProcessInfo it: runningAppProcessList) {
+        for (ActivityManager.RunningAppProcessInfo it : runningAppProcessList) {
             if (it.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
                     && getApplicationInfo().processName.equals(it.processName)
             ) {
@@ -187,12 +238,12 @@ public class DownloadService extends IntentService {
             }
         }
     }
-    
+
     /**
      * 下载成功， 发送 Notification
      */
     private void sendDownLoadSuccessNotification(File apkFile, String appName, int icon) {
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             mDownLoadSuccessBuilder = new Builder(this, "downLoadSuccessChannelId");
             NotificationChannel channel = new NotificationChannel("downLoadSuccessChannelId", "downLoadSuccessChannel", NotificationManager.IMPORTANCE_LOW);
             mNotifyManager.createNotificationChannel(channel);
